@@ -1,4 +1,4 @@
-# Vehicle License Plate Recognition System
+# Real-Time-License-Plate-Recognition
 
 ## Team: Tech Titans
 
