@@ -166,7 +166,9 @@ def main():
         frame_number += 1
 
         # Display the processed frame
+        plt.figure('Tech Titan - Realtime License Plate Recognition System')
         plt.imshow(processed_frame)
+        plt.title('Tech Titan - Realtime License Plate Recognition System')
         plt.pause(0.01)  # Adjust the pause time as needed
         plt.clf()  # Clear the plot for the next frame
         
