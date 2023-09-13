@@ -48,11 +48,11 @@ Ensure your system is properly configured to feed real-time video streams for pr
 
 Team Members:
 
-Karl Santiago Bernaldez: Project Leader & Backend Developer
+[Karl Santiago Bernaldez](https://www.facebook.com/karl.bernaldez.92): Project Leader & Backend Developer
 
-Juan Rodrigo Badiola: Data Analyst & Tester
+[Juan Rodrigo Badiola](https://www.facebook.com/juanrodrigobadiola): Data Analyst & Tester
 
-Ken Evan Soltes: Tester / Documentation Specialist
+[Ken Evan Soltes](https://www.facebook.com/punkenmetal.head): Tester / Documentation Specialist
 
 
 ### License
