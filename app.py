@@ -3,7 +3,7 @@ import numpy as np
 from ultralytics import YOLO
 import easyocr
 from util import write_csv
-import os, uuid
+import os, uuid, re
 import matplotlib.pyplot as plt
 
 # Initialize necessary variables and models
@@ -97,6 +97,31 @@ def model_prediction(img, frame_number):
                             license_plate_crop_gray = cv2.cvtColor(license_plate_crop, cv2.COLOR_BGR2GRAY) 
                             license_plate_text, license_plate_text_score = read_license_plate(license_plate_crop_gray, img)
 
+                            if license_plate_text is not None:
+                                license_plate_text = re.sub(r'[^A-Za-z0-9]', '', license_plate_text)
+                                
+                                def is_valid_format(lp_text, veh_class_id):
+                                    if veh_class_id in ["Car", "Bus", "Truck"]:
+                                        return re.fullmatch(r'[A-Za-z]{3}-\d{1,4}', lp_text)
+                                    elif veh_class_id == "Motorcycle":
+                                        return re.fullmatch(r'\d{1,3}-[A-Za-z]{1,3}', lp_text)
+                                    else:
+                                        return False
+
+                                # Attempt to format the license plate text correctly
+                                if veh_class_id in ["Car", "Bus", "Truck"]:
+                                    if len(license_plate_text) >= 7:
+                                        license_plate_text = license_plate_text[:3] + "-" + license_plate_text[3:7]
+                                elif veh_class_id == "Motorcycle":
+                                    if len(license_plate_text) >= 6:
+                                        license_plate_text = license_plate_text[:3] + "-" + license_plate_text[3:6]
+                                
+                                if license_plate_text_score <= 0.5:
+                                    license_plate_text = "Unreadable License Plate"
+                                # Check if the formatted text is valid, if not set a default value
+                                elif not is_valid_format(license_plate_text, veh_class_id):
+                                    license_plate_text = "License plate not recognized"                    
+
                             licenses_texts.append(license_plate_text)
 
                             if license_plate_text is not None and license_plate_text_score is not None:
@@ -148,7 +173,7 @@ def model_prediction(img, frame_number):
 
 
 def main():
-    cap = cv2.VideoCapture(0)
+    cap = cv2.VideoCapture(2)
     processor = VideoProcessor()
     frame_number = 0
 
