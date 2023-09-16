@@ -3,26 +3,17 @@ import numpy as np
 from ultralytics import YOLO
 import easyocr
 from util import write_csv
-import os, uuid, re
+import os, re, sys
 import matplotlib.pyplot as plt
+from sort import *
 
-# Initialize necessary variables and models
 lp_folder_path = "./licenses_plates_imgs_detected/"
 vehicle_folder_path = "./vehicles/"
-LICENSE_MODEL_DETECTION_DIR = './models/license_plate_detector.pt'
-COCO_MODEL_DIR = "./models/yolov8n.pt"
-
-reader = easyocr.Reader(['en'], gpu=False)
+model = YOLO("./models/yolov8n.pt")
+license_plate_detector = YOLO('./models/license_plate_detector.pt')
 vehicles = {2: "Car", 3: "Motorcycle", 5: "Bus", 6: "Truck"}
+reader = easyocr.Reader(['en'], gpu=False)
 
-coco_model = YOLO(COCO_MODEL_DIR)
-license_plate_detector = YOLO(LICENSE_MODEL_DETECTION_DIR)
-
-threshold = 0.15
-
-class VideoProcessor:
-    def recv(self, img):
-        return img
 
 def read_license_plate(license_plate_crop, img):
     scores = 0
@@ -53,157 +44,133 @@ def read_license_plate(license_plate_crop, img):
         return " ".join(plate), scores/len(plate)
     else :
         return " ".join(plate), 0
+    
 
-def model_prediction(img, frame_number):
-    license_numbers = 0
-    results = {}
-    licenses_texts = []
-
-    img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
-
-    object_detections = coco_model(img)[0]
+def model_predection(frame):
+    # Run YOLOv8 tracking on the frame, persisting tracks between frames
+    vehicle_detection = model.track(frame, persist=True)[0]
     vehicle_detected = False
     vehicle_bboxes = []
+    license_numbers = 0
+    licenses_texts = []
+    results = {}
 
-    if len(object_detections.boxes.cls.tolist()) != 0:
-        for detection in object_detections.boxes.data.tolist():
-            xcar1, ycar1, xcar2, ycar2, car_score, class_id = detection
 
-            if int(class_id) in vehicles:
-                cv2.rectangle(img, (int(xcar1), int(ycar1)), (int(xcar2), int(ycar2)), (0, 0, 255), 3)
-                vehicle_detected = True
-                vehicle_bboxes.append([xcar1, ycar1, xcar2, ycar2, car_score, vehicles[int(class_id)]])  # store class name instead of class id
+    if len(vehicle_detection.boxes.cls.tolist()) != 0:
+        for detection in vehicle_detection.boxes.data.tolist():
+            print(detection)
+            # Extracting bounding box coordinates, track_id , detection_score, class_id from the detection
+            if len(detection) == 7:
+                xvehicle1, yvehicle1, xvehicle2, yvehicle2, track_id, vehicle_score, class_id = detection
 
+                #If the detected class_id is in Vehicle Dictionary , draw rectangle around it.
+                if int(class_id) in vehicles:
+                    class_name = vehicles[int(class_id)]
+                    label = f"{class_name}-{int(track_id)}"
+                    cv2.rectangle(frame, (int(xvehicle1), int(yvehicle1)), (int(xvehicle2), int(yvehicle2)), (0, 0, 255), 3)
+                    cv2.putText(frame, label, (int(xvehicle1), int(yvehicle1) - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+                    vehicle_detected = True
+                    # Storing bounding box details with vehicle class name instead of class ID
+                    vehicle_bboxes.append([track_id, xvehicle1, yvehicle1, xvehicle2, yvehicle2, vehicle_score, class_name])  # store class name instead of class id
+
+        #If Vehicle is detected detect license plate
         if vehicle_detected:
-            license_detections = license_plate_detector(img)[0]
-            
+            license_detections = license_plate_detector.track(frame, persist=True)[0]
+            #If license plate is detected 
             if len(license_detections.boxes.cls.tolist()) != 0:
+                #Storing all license plate crops
                 license_plate_crops_total = []
                 for license_plate in license_detections.boxes.data.tolist():
-                    x1, y1, x2, y2, score, class_id = license_plate
-
-                    # Check if this license plate is inside any vehicle bounding box
-                    for veh_bbox in vehicle_bboxes:
-                        xcar1, ycar1, xcar2, ycar2, car_score, veh_class_id = veh_bbox
-                        if x1 > xcar1 and x2 < xcar2 and y1 > ycar1 and y2 < ycar2:
-                            # This license plate is inside this vehicle bounding box
-                            cv2.rectangle(img, (int(x1), int(y1)), (int(x2), int(y2)), (0, 255, 0), 3)
-
+                    print(license_plate)
+                    if len(license_plate) == 7:
+                        #Bounding box coordinates and other details of license plate
+                        xplate1, yplate1, xplate2, yplate2, lp_track_id, lp_score, class_id = license_plate
+                        
+                        # Check if this license plate is inside vehicle bounding box
+                        for veh_bbox in vehicle_bboxes:
+                            #Get Bbox of the vehicle
+                            xvehicle1, yvehicle1, xvehicle2, yvehicle2, track_id2, vehicle_score, class_name = veh_bbox
                             
-                            license_plate_crop = img[int(y1):int(y2), int(x1): int(x2), :]
-                            img_name = '{}.jpg'.format(uuid.uuid1())
-                            cv2.imwrite(os.path.join(lp_folder_path, img_name), license_plate_crop)
-
-                            license_plate_crop_gray = cv2.cvtColor(license_plate_crop, cv2.COLOR_BGR2GRAY) 
-                            license_plate_text, license_plate_text_score = read_license_plate(license_plate_crop_gray, img)
-
-                            if license_plate_text is not None:
-                                license_plate_text = re.sub(r'[^A-Za-z0-9]', '', license_plate_text)
+                            #Check if license plate bbox is within the bbox of the vehicle
+                            if xplate1 > xvehicle1 and xplate2 > xvehicle2 and yplate1 < yvehicle1 and yplate2 < yvehicle2:
+                                #Cropping the license plate frame if it meets the threshold
+                                if lp_score >= 0.65:
+                                    license_plate_crop = frame[int(yplate1):int(yplate2), int(xplate1): int(xplate2), :]                                
+                                    #Convert to grayscale and get the LP text and score
+                                    license_plate_crop_gray = cv2.cvtColor(license_plate_crop, cv2.COLOR_BGR2GRAY) 
                                 
-                                def is_valid_format(lp_text, veh_class_id):
-                                    if veh_class_id in ["Car", "Bus", "Truck"]:
-                                        return re.fullmatch(r'[A-Za-z]{3}-\d{1,4}', lp_text)
-                                    elif veh_class_id == "Motorcycle":
-                                        return re.fullmatch(r'\d{1,3}-[A-Za-z]{1,3}', lp_text)
-                                    else:
-                                        return False
+                                    #Apply OCR
+                                    license_plate_text, license_plate_text_score = read_license_plate(license_plate_crop_gray, frame)
 
-                                # Attempt to format the license plate text correctly
-                                if veh_class_id in ["Car", "Bus", "Truck"]:
-                                    if len(license_plate_text) >= 7:
-                                        license_plate_text = license_plate_text[:3] + "-" + license_plate_text[3:7]
-                                elif veh_class_id == "Motorcycle":
-                                    if len(license_plate_text) >= 6:
-                                        license_plate_text = license_plate_text[:3] + "-" + license_plate_text[3:6]
-                                
-                                if license_plate_text_score <= 0.5:
-                                    license_plate_text = "Unreadable License Plate"
-                                # Check if the formatted text is valid, if not set a default value
-                                elif not is_valid_format(license_plate_text, veh_class_id):
-                                    license_plate_text = "License plate not recognized"                    
+                                    #Processing the recognized text to remove unwanted characters
+                                    if license_plate_text is not None:
+                                        license_plate_text = re.sub(r'[^A-Za-z0-9]', '', license_plate_text)
 
-                            licenses_texts.append(license_plate_text)
+                                        #Formatting the license plate text based on the vehicle type
+                                        if class_name in ["Car", "Bus", "Truck"]:
+                                            if len(license_plate_text) >= 6:
+                                                license_plate_text = license_plate_text[:3] + "-" + license_plate_text[3:7]
+                                        elif class_name == "Motorcycle":
+                                            if len(license_plate_text) >= 6:
+                                                license_plate_text = license_plate_text[:3] + "-" + license_plate_text[3:6]
+                                        
+                                        #Handling cases where license plate text is unreadable or not recognized properly
+                                        elif license_plate_text_score <= 0.2:
+                                            license_plate_text = "Unreadable License Plate"
 
-                            if license_plate_text is not None and license_plate_text_score is not None:
-                                # Drawing the recognized license plate number on the image
-                                cv2.rectangle(img, (int(x1), int(y1) - 40), (int(x2), int(y1)), (255, 255, 255), cv2.FILLED)
-                                cv2.putText(img, str(license_plate_text), (int(x1), int(y1) - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 0), 2)
+                                        # Check if the formatted text is valid, if not set a default value
+                                        elif not is_valid_format(license_plate_text, class_name):
+                                            license_plate_text = "License plate not recognized"                    
 
-                                # Adding class name and score to the preview
-                                cv2.putText(img, f"Class: {veh_class_id}, Score: {round(car_score, 2)}", (int(x1), int(y1) - 60), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
-                                
-                                # Adding license number score to the preview
-                                cv2.putText(img, f"LP Score: {round(license_plate_text_score, 2)}", (int(x1), int(y1) - 80), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+                                    licenses_texts.append(license_plate_text)
 
-                                license_plate_crops_total.append(license_plate_crop)
-                                
-                                # Save a cropped image of the car
-                                car_crop = img[int(ycar1):int(ycar2), int(xcar1):int(xcar2), :]
-                                car_img_name = f'{veh_class_id}{frame_number}_{license_numbers}.jpg'
-                                cv2.imwrite(os.path.join(vehicle_folder_path, car_img_name), car_crop)
-
-                                results[license_numbers] = {
-                                                                license_numbers: {
-                                                                    'car': {
-                                                                        'bbox': [xcar1, ycar1, xcar2, ycar2], 
-                                                                        'car_score': car_score,
-                                                                        'vehicle_img': car_img_name,  # Add the path to the vehicle image
-                                                                        'vehicle_class': veh_class_id  # Add the vehicle class
-                                                                    },
-                                                                    'license_plate': {
-                                                                        'bbox': [x1, y1, x2, y2], 
-                                                                        'text': license_plate_text, 
-                                                                        'bbox_score': score, 
-                                                                        'text_score': license_plate_text_score
-                                                                    }
+                                    if license_plate_text is not None and license_plate_text_score is not None:
+                                        lp_label = f"{class_name} {'License Plate:'} {license_plate_text}"
+                                        cv2.rectangle(frame, (int(xplate1), int(yplate1)), (int(xplate2), int(yplate2)), (0, 255, 0), 3)
+                                        cv2.putText(frame, lp_label, (int(xplate1), int(yplate1) - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0))
+                                        license_plate_crops_total.append(license_plate_crop)
+                                        
+                                        # Save a cropped image of the car and license plate
+                                        img_name = f"{int(lp_track_id)}_{license_plate_text}"
+                                        cv2.imwrite(os.path.join(lp_folder_path, img_name), license_plate_crop)
+                                        car_crop = frame[int(yvehicle1):int(yvehicle2), int(xvehicle1):int(xvehicle2), :]
+                                        car_img_name = f'{class_name}{track_id2}_{license_numbers}.jpg'
+                                        cv2.imwrite(os.path.join(vehicle_folder_path, car_img_name), car_crop)
+                                        results[track_id] = {
+                                                                'vehicle_details': {
+                                                                    'track_id': int(track_id),
+                                                                    'class_name': class_name,
+                                                                    'car_img_name': car_img_name,  # Ensure you capture the car image name correctly
+                                                                },
+                                                                'license_plate_details': {
+                                                                    'lp_track_id': int(lp_track_id),
+                                                                    'img_name': img_name,  # Ensure you capture the license plate image name correctly
+                                                                    'license_plate_text': license_plate_text,  # Ensure you extract the license plate text correctly
+                                                                    'lp_score': lp_score,  # Ensure you capture the license plate score correctly
                                                                 }
-                                                            }
-                                license_numbers += 1
-                                write_csv(results, f"./results/detection_results.csv")
-              
-                img_wth_box = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-                return [img_wth_box, licenses_texts, license_plate_crops_total, results]
+                                                            }  
+                                    license_numbers += 1
+                                    write_csv(results, f"./results/detection_results.csv")
+    return frame
+
+cap = cv2.VideoCapture(2)
+ret = True
+while cap.isOpened():
+    # Read a frame from the video
+    success, frame = cap.read()
+
+    if success:
+        model_predection(frame)
+        # Display the annotated frame
+        cv2.imshow("Tech Titans Realtime License Plate Recognition", frame)
+
+        # Break the loop if 'q' is pressed
+        if cv2.waitKey(1) & 0xFF == ord("q"):
+            break
     else:
-        xcar1, ycar1, xcar2, ycar2 = 0, 0, 0, 0
-        car_score = 0
+        # Break the loop if the end of the video is reached
+        break
 
-    img_wth_box = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-    return [img_wth_box, [], [], {}]  # Include an empty dictionary for results
-
-
-
-def main():
-    cap = cv2.VideoCapture(2)
-    processor = VideoProcessor()
-    frame_number = 0
-
-    while True:
-        ret, frame = cap.read()
-        if not ret:
-            break
-        
-        # Process the frame
-        processed_frame = processor.recv(frame)
-        result = model_prediction(processed_frame, frame_number)
-        processed_frame = result[0]
-
-        # Increment frame number
-        frame_number += 1
-
-        # Display the processed frame
-        plt.figure('Tech Titan - Realtime License Plate Recognition System')
-        plt.imshow(processed_frame)
-        plt.title('Tech Titan - Realtime License Plate Recognition System')
-        plt.pause(0.01)  # Adjust the pause time as needed
-        plt.clf()  # Clear the plot for the next frame
-        
-        # Break the loop on pressing 'q'
-        if cv2.waitKey(1) & 0xFF == ord('q'):
-            break
-
-    # Release the video capture object and close OpenCV windows
-    cap.release()
-    cv2.destroyAllWindows()
-
-if __name__ == "__main__":
-    main()
+# Release the video capture object and close the display window
+cap.release()
+cv2.destroyAllWindows()
