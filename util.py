@@ -5,23 +5,35 @@ import easyocr, os, csv
 reader = easyocr.Reader(['en'], gpu=False)
 
 # Mapping dictionaries for character conversion
-dict_char_to_int = {'O': '0',
-                    'I': '1',
-                    'J': '3',
-                    'A': '4',
-                    'G': '6',
-                    'S': '5'}
+def text_conversion(ocr_output):
+    dict_char_to_int = {
+        'O': '0', 'I': '1', 'Z': '2', 'J': '3', 
+        'A': '4', 'S': '5', 'G': '6', 'T': '7', 
+        'B': '8', 'Q': '0', 'D': '0'
+    }
 
-dict_int_to_char = {'0': 'O',
-                    '1': 'I',
-                    '3': 'J',
-                    '4': 'A',
-                    '6': 'G',
-                    '5': 'S'}
+    dict_int_to_char = {
+        '0': 'O', '1': 'I', '2': 'Z', '3': 'J', 
+        '4': 'A', '5': 'S', '6': 'G', '7': 'T', 
+        '8': 'B', '9': 'g',  # or 'q' depending on the common misreadings
+    }
+
+    # Correct characters to integers
+    for char, replacement in dict_char_to_int.items():
+        ocr_output = ocr_output.replace(char, replacement)
+
+    # Correct integers to characters
+    for char, replacement in dict_int_to_char.items():
+        ocr_output = ocr_output.replace(char, replacement)
+
+    return ocr_output
 
 
 import csv
 import os
+
+import os
+import csv
 
 def write_csv(results, output_path):
     """
@@ -37,20 +49,24 @@ def write_csv(results, output_path):
         writer = csv.writer(f)
         
         if not file_exists:
-            writer.writerow(['frame_nmr', 'vehicle_img', 'vehicle_class', 'license_number', 'license_number_score'])
+            writer.writerow([
+                'Vehicle_ID', 'Vehicle Class', 'Vehicle_Image', 
+                'License_Plate_ID', 'LP Image', 'License Plate Number', 'LP_Score'
+            ])
         
-        for frame_nmr in results.keys():
-            for car_id in results[frame_nmr].keys():
-                if 'car' in results[frame_nmr][car_id].keys() and \
-                   'license_plate' in results[frame_nmr][car_id].keys() and \
-                   'text' in results[frame_nmr][car_id]['license_plate'].keys():
-                    writer.writerow([
-                        frame_nmr,
-                        results[frame_nmr][car_id]['car'].get('vehicle_img', 'N/A'),  # Get the vehicle image file path
-                        results[frame_nmr][car_id]['car'].get('vehicle_class', 'N/A'), # Get the vehicle class
-                        results[frame_nmr][car_id]['license_plate']['text'],  # Get the license number
-                        results[frame_nmr][car_id]['license_plate']['text_score']  # Get the license number score
-                    ])
+        for track_id, data in results.items():
+            vehicle_details = data.get('vehicle_details', {})
+            lp_details = data.get('license_plate_details', {})
+            
+            writer.writerow([
+                track_id,
+                vehicle_details.get('class_name', 'N/A'),
+                vehicle_details.get('car_img_name', 'N/A'),
+                lp_details.get('lp_track_id', 'N/A'),
+                lp_details.get('img_name', 'N/A'),
+                lp_details.get('license_plate_text', 'N/A'),
+                lp_details.get('lp_score', 'N/A')
+            ])
 
 
 
