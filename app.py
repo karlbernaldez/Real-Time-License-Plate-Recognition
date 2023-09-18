@@ -2,7 +2,7 @@ import cv2
 import numpy as np
 from ultralytics import YOLO
 import easyocr
-from util import write_csv
+from util import write_csv, text_conversion
 import os, re, sys
 import matplotlib.pyplot as plt
 from sort import *
@@ -94,14 +94,20 @@ def model_predection(frame):
                             #Check if license plate bbox is within the bbox of the vehicle
                             if xplate1 > xvehicle1 and xplate2 > xvehicle2 and yplate1 < yvehicle1 and yplate2 < yvehicle2:
                                 #Cropping the license plate frame if it meets the threshold
-                                if lp_score >= 0.65:
+                                if lp_score >= 0.1:
                                     license_plate_crop = frame[int(yplate1):int(yplate2), int(xplate1): int(xplate2), :]                                
                                     #Convert to grayscale and get the LP text and score
                                     license_plate_crop_gray = cv2.cvtColor(license_plate_crop, cv2.COLOR_BGR2GRAY) 
-                                
+                                    license_plate_crop_gray = cv2.equalizeHist(license_plate_crop_gray)
+                                    license_plate_crop_gray = cv2.medianBlur(license_plate_crop_gray, 3)
+                                    _, license_plate_crop_gray = cv2.threshold(license_plate_crop_gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+                                    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
+                                    license_plate_crop_gray = cv2.morphologyEx(license_plate_crop_gray, cv2.MORPH_CLOSE, kernel)
+                                    cv2.imshow('Grayscale Image', license_plate_crop_gray)
+
                                     #Apply OCR
                                     license_plate_text, license_plate_text_score = read_license_plate(license_plate_crop_gray, frame)
-
+                                    print()
                                     #Processing the recognized text to remove unwanted characters
                                     if license_plate_text is not None:
                                         license_plate_text = re.sub(r'[^A-Za-z0-9]', '', license_plate_text)
@@ -119,8 +125,8 @@ def model_predection(frame):
                                             license_plate_text = "Unreadable License Plate"
 
                                         # Check if the formatted text is valid, if not set a default value
-                                        elif not is_valid_format(license_plate_text, class_name):
-                                            license_plate_text = "License plate not recognized"                    
+                                        # else:
+                                        #     license_plate_text = "License plate not recognized"                    
 
                                     licenses_texts.append(license_plate_text)
 
@@ -153,12 +159,17 @@ def model_predection(frame):
                                     write_csv(results, f"./results/detection_results.csv")
     return frame
 
-cap = cv2.VideoCapture(2)
+cap = cv2.VideoCapture('sample.mp4')
+
+# Set the desired width and height for the resized frames
+width = 640
+height = 480
+
 ret = True
 while cap.isOpened():
     # Read a frame from the video
     success, frame = cap.read()
-
+    frame = cv2.resize(frame, (width, height))
     if success:
         model_predection(frame)
         # Display the annotated frame
