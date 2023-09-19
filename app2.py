@@ -2,7 +2,7 @@ import cv2
 import numpy as np
 from ultralytics import YOLO
 import easyocr
-from util import write_csv, text_conversion
+from util import write_csv, int2char, char2int
 import os, re, sys
 import matplotlib.pyplot as plt
 from sort import *
