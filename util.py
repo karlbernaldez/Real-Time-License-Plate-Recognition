@@ -5,28 +5,30 @@ import easyocr, os, csv
 reader = easyocr.Reader(['en'], gpu=False)
 
 # Mapping dictionaries for character conversion
-def text_conversion(ocr_output):
-    dict_char_to_int = {
+dict_char_to_int = {
         'O': '0', 'I': '1', 'Z': '2', 'J': '3', 
         'A': '4', 'S': '5', 'G': '6', 'T': '7', 
         'B': '8', 'Q': '0', 'D': '0'
     }
 
-    dict_int_to_char = {
+dict_int_to_char = {
         '0': 'O', '1': 'I', '2': 'Z', '3': 'J', 
         '4': 'A', '5': 'S', '6': 'G', '7': 'T', 
         '8': 'B', '9': 'g',  # or 'q' depending on the common misreadings
     }
 
-    # Correct characters to integers
-    for char, replacement in dict_char_to_int.items():
-        ocr_output = ocr_output.replace(char, replacement)
+def char2int(l):
+        for char, replacement in dict_char_to_int.items():
+            l = l.replace(char, replacement)
+        return l
 
     # Correct integers to characters
-    for char, replacement in dict_int_to_char.items():
-        ocr_output = ocr_output.replace(char, replacement)
+def int2char(n):
+        for char, replacement in dict_int_to_char.items():
+            n = n.replace(char, replacement)
+        return n
 
-    return ocr_output
+
 
 
 import csv
