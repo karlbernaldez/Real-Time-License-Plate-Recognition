@@ -2,10 +2,10 @@ import cv2
 import numpy as np
 from ultralytics import YOLO
 import easyocr
-from util import write_csv, text_conversion
+from util import write_csv, char2int, int2char
 import os, re, sys
 import matplotlib.pyplot as plt
-from sort import *
+
 
 lp_folder_path = "./licenses_plates_imgs_detected/"
 vehicle_folder_path = "./vehicles/"
@@ -51,6 +51,7 @@ def model_predection(frame):
     vehicle_detection = model.track(frame, persist=True)[0]
     vehicle_detected = False
     vehicle_bboxes = []
+    lp_bbox = []
     license_numbers = 0
     licenses_texts = []
     results = {}
@@ -85,14 +86,17 @@ def model_predection(frame):
                     if len(license_plate) == 7:
                         #Bounding box coordinates and other details of license plate
                         xplate1, yplate1, xplate2, yplate2, lp_track_id, lp_score, class_id = license_plate
-                        
-                        # Check if this license plate is inside vehicle bounding box
+
+                        # Check if license plate is inside vehicle bounding box
                         for veh_bbox in vehicle_bboxes:
                             #Get Bbox of the vehicle
                             xvehicle1, yvehicle1, xvehicle2, yvehicle2, track_id2, vehicle_score, class_name = veh_bbox
                             
                             #Check if license plate bbox is within the bbox of the vehicle
                             if xplate1 > xvehicle1 and xplate2 > xvehicle2 and yplate1 < yvehicle1 and yplate2 < yvehicle2:
+                                lp_bbox.append(xplate1, yplate1, xplate2, yplate2, lp_track_id, lp_score)
+                                
+                            
                                 #Cropping the license plate frame if it meets the threshold
                                 if lp_score >= 0.1:
                                     license_plate_crop = frame[int(yplate1):int(yplate2), int(xplate1): int(xplate2), :]                                
@@ -108,18 +112,47 @@ def model_predection(frame):
                                     #Apply OCR
                                     license_plate_text, license_plate_text_score = read_license_plate(license_plate_crop_gray, frame)
                                     print()
+
                                     #Processing the recognized text to remove unwanted characters
                                     if license_plate_text is not None:
                                         license_plate_text = re.sub(r'[^A-Za-z0-9]', '', license_plate_text)
-
+                                        lp_length = len(license_plate_text)
                                         #Formatting the license plate text based on the vehicle type
                                         if class_name in ["Car", "Bus", "Truck"]:
-                                            if len(license_plate_text) >= 6:
-                                                license_plate_text = license_plate_text[:3] + "-" + license_plate_text[3:7]
+                                            if lp_length >= 6:
+                                                l = license_plate_text[:3]
+                                                n = license_plate_text[3:lp_length]
+                                                # Check if 'l' contains a number
+                                                if any(char.isdigit() for char in l):
+                                                    l = int2char(l)
+                                                # Check if 'n' contains a letter
+                                                if any(char.isalpha() for char in n):
+                                                    n = char2int(n)
+                                                license_plate_text = (l + "-" + n)
+
                                         elif class_name == "Motorcycle":
-                                            if len(license_plate_text) >= 6:
-                                                license_plate_text = license_plate_text[:3] + "-" + license_plate_text[3:6]
-                                        
+                                            if lp_length == 6:
+                                                n = license_plate_text[:3]
+                                                l = license_plate_text[3:6]
+                                                # Check if 'l' contains a number
+                                                if any(char.isdigit() for char in l):
+                                                    l = int2char(l)
+                                                # Check if 'n' contains a letter
+                                                if any(char.isalpha() for char in n):
+                                                    n = char2int(n)
+                                                license_plate_text = (n + "-" + l)
+
+                                            elif lp_length > 6 and lp_length < 7:
+                                                l = license_plate_text[:2]
+                                                n = license_plate_text[2:lp_length]
+                                                # Check if 'l' contains a number
+                                                if any(char.isdigit() for char in l):
+                                                    l = int2char(l)
+                                                # Check if 'n' contains a letter
+                                                if any(char.isalpha() for char in n):
+                                                    n = char2int(n)
+                                                license_plate_text = (l + "-" + n)
+
                                         #Handling cases where license plate text is unreadable or not recognized properly
                                         elif license_plate_text_score <= 0.2:
                                             license_plate_text = "Unreadable License Plate"
@@ -131,7 +164,7 @@ def model_predection(frame):
                                     licenses_texts.append(license_plate_text)
 
                                     if license_plate_text is not None and license_plate_text_score is not None:
-                                        lp_label = f"{class_name} {'License Plate:'} {license_plate_text}"
+                                        lp_label = f"License Plate: {license_plate_text}"
                                         cv2.rectangle(frame, (int(xplate1), int(yplate1)), (int(xplate2), int(yplate2)), (0, 255, 0), 3)
                                         cv2.putText(frame, lp_label, (int(xplate1), int(yplate1) - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0))
                                         license_plate_crops_total.append(license_plate_crop)
@@ -159,11 +192,11 @@ def model_predection(frame):
                                     write_csv(results, f"./results/detection_results.csv")
     return frame
 
-cap = cv2.VideoCapture('sample.mp4')
+cap = cv2.VideoCapture(2)
 
 # Set the desired width and height for the resized frames
-width = 640
-height = 480
+width = 1280
+height = 720
 
 ret = True
 while cap.isOpened():
