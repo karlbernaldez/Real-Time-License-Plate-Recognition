@@ -5,12 +5,14 @@ import easyocr
 from util import write_csv, int2char, char2int
 import os, re, sys
 import matplotlib.pyplot as plt
-from sort import *
+import torch
+
+torch.cuda.set_device(0) # Set to your desired GPU number
 
 lp_folder_path = "./licenses_plates_imgs_detected/"
 vehicle_folder_path = "./vehicles/"
-model = YOLO("./models/yolov8n.pt", device='cuda')
-license_plate_detector = YOLO('./models/license_plate_detector.pt', device='cuda')
+model = YOLO("./models/yolov8n.pt")
+license_plate_detector = YOLO('./models/license_plate_detector.pt')
 vehicles = {2: "Car", 3: "Motorcycle", 5: "Bus", 6: "Truck"}
 reader = easyocr.Reader(['en'], gpu=True)
 
@@ -147,7 +149,7 @@ def model_predection(frame):
     lp_bbox = []
     
 
-    vehicle_detection = model.track(frame, persist=True)[0]
+    vehicle_detection = model.track(frame, persist=True, device='cuda')[0]
 
 
     if len(vehicle_detection.boxes.cls.tolist()) != 0:
@@ -172,7 +174,7 @@ def model_predection(frame):
 
         #If Vehicle is detected detect license plate
         if vehicle_detected:
-            license_detections = license_plate_detector.track(frame, persist=True)[0]
+            license_detections = license_plate_detector.track(frame, persist=True,device='cuda')[0]
 
             #If license plate is detected 
             if len(license_detections.boxes.cls.tolist()) != 0:
@@ -197,7 +199,7 @@ def model_predection(frame):
     return frame               
                        
 
-cap = cv2.VideoCapture(0)
+cap = cv2.VideoCapture("sample.mp4")
 
 # Set the desired width and height for the resized frames
 width = 1280
