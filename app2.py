@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 lp_folder_path = "./licenses_plates_imgs_detected/"
 vehicle_folder_path = "./vehicles/"
 model = YOLO("./models/yolov8n.pt")
-license_plate_detector = YOLO('./models/license_plate_detector.pt')
+license_plate_detector = YOLO('lpr.pt')
 vehicles = {2: "Car", 3: "Motorcycle", 5: "Bus", 6: "Truck"}
 reader = easyocr.Reader(['en'], gpu=True)
 
@@ -48,7 +48,7 @@ def read_license_plate(license_plate_crop, img):
 
 def model_predection(frame):
     # Run YOLOv8 tracking on the frame, persisting tracks between frames
-    vehicle_detection = model.track(frame, persist=True, device=0)[0]
+    vehicle_detection = model.track(frame, persist=True)[0]
     vehicle_detected = False
     vehicle_bboxes = []
     lp_bbox = []
@@ -75,7 +75,7 @@ def model_predection(frame):
 
         #If Vehicle is detected detect license plate
         if vehicle_detected:
-            license_detections = license_plate_detector.track(frame, persist=True, device=0)[0]
+            license_detections = license_plate_detector.track(frame, persist=True)[0]
             
             #If license plate is detected 
             if len(license_detections.boxes.cls.tolist()) != 0:
