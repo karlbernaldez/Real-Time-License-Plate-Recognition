@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 lp_folder_path = "./licenses_plates_imgs_detected/"
 vehicle_folder_path = "./vehicles/"
 model = YOLO("./models/yolov8n.pt")
-license_plate_detector = YOLO('lpr.pt')
+license_plate_detector = YOLO('./models/license_plate_detector.pt')
 vehicles = {2: "Car", 3: "Motorcycle", 5: "Bus", 6: "Truck"}
 reader = easyocr.Reader(['en'], gpu=True)
 
