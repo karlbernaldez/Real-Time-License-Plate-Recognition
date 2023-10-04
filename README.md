@@ -1,4 +1,10 @@
 # Real-Time-License-Plate-Recognition
+<a href="https://universe.roboflow.com/tech-titans/ttlpr/model/">
+    <img src="https://app.roboflow.com/images/try-model-badge.svg"></img>
+</a>
+<a href="https://universe.roboflow.com/tech-titans/ttlpr">
+    <img src="https://app.roboflow.com/images/download-dataset-badge.svg"></img>
+</a>
 
 ## Team: Tech Titans
 
