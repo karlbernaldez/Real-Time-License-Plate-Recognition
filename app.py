@@ -10,7 +10,7 @@ import os, uuid
 # Initialize necessary variables and models
 lp_folder_path = "./licenses_plates_imgs_detected/"
 vehicle_folder_path = "./vehicles/"
-LICENSE_MODEL_DETECTION_DIR = './models/license_plate_detector.pt'
+LICENSE_MODEL_DETECTION_DIR = './models/best.pt'
 COCO_MODEL_DIR = "./models/yolov8s.pt"
 
 reader = easyocr.Reader(['en'], gpu=True)
@@ -18,7 +18,7 @@ vehicles = {2: "Car", 3: "Motorcycle", 5: "Bus", 6: "Truck"}
 
 coco_model = YOLO(COCO_MODEL_DIR)
 license_plate_detector = YOLO(LICENSE_MODEL_DETECTION_DIR)
-
+    
 threshold = 0.15
 
 class VideoProcessor:
@@ -101,17 +101,15 @@ def model_prediction(img, frame_number):
                                 img_name = '{}.jpg'.format(uuid.uuid1())
                                 cv2.imwrite(os.path.join(lp_folder_path, img_name), license_plate_crop)
 
-                                license_plate_crop_gray = cv2.cvtColor(license_plate_crop, cv2.COLOR_BGR2GRAY)
-                                license_plate_crop_gray = cv2.equalizeHist(license_plate_crop_gray)
-                                license_plate_crop_gray = cv2.medianBlur(license_plate_crop_gray, 3)
-                                
+                                license_plate_crop_gray = cv2.cvtColor(license_plate_crop, cv2.COLOR_BGR2GRAY)                                
+                                        
                                 cv2.imshow('Grayscale Image', license_plate_crop_gray)
                                 license_plate_text, license_plate_text_score = read_license_plate(license_plate_crop_gray, img)
 
                                 licenses_texts.append(license_plate_text)
 
                                 if license_plate_text is not None and license_plate_text_score is not None:
-                                    if license_plate_text_score >= 0.3:
+                                    if license_plate_text_score >= 0.1:
                                         lp_length = len(license_plate_text)
 
                                         if class_name in ["Car", "Bus", "Truck"]:
@@ -219,6 +217,7 @@ def main():
         # Set the desired width and height for the resized frames
         width = 1280
         height = 720
+        
         processed_frame = cv2.resize(processed_frame, (width, height))
         cv2.imshow("Tech Titans Realtime License Plate Recognition", processed_frame)
 
