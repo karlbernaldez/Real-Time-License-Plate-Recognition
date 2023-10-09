@@ -4,8 +4,7 @@ from ultralytics import YOLO
 import easyocr
 from util import write_csv, char2int, int2char
 import os, time, re
-
-
+import torch
 
 # Initialize necessary variables and models
 lp_folder_path = "./licenses_plates_imgs_detected/"
@@ -18,6 +17,12 @@ vehicles = {2: "Car", 3: "MC", 5: "Bus", 6: "Truck"}
 
 coco_model = YOLO(COCO_MODEL_DIR)
 license_plate_detector = YOLO(LICENSE_MODEL_DETECTION_DIR)
+
+# Check if GPU is available
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+# Set the YOLOV8 model to run on GPU
+coco_model.to(device)
+license_plate_detector.to(device)
     
 threshold = 0.15
 
@@ -185,7 +190,7 @@ def model_prediction(img, frame_number):
 
 
 def main():
-    cap = cv2.VideoCapture('sample.mp4')
+    cap = cv2.VideoCapture(0)
     processor = VideoProcessor()
     frame_number = 0
             
