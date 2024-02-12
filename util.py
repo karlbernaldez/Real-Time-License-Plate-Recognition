@@ -1,3 +1,4 @@
+
 import os, csv
 # import xlwings as xw
 import datetime
@@ -182,3 +183,5 @@ def write_csv(results, output_path):
 #             return text, score
 
 #     return None, None
+util.py
+Ipinapakita ang util.py.
