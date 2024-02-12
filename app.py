@@ -15,15 +15,12 @@ COCO_MODEL_DIR = "./models/yolov8s.pt"
 reader = easyocr.Reader(['en'], gpu=True)
 vehicles = {2: "Car", 3: "MC", 5: "Bus", 6: "Truck"}
 
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 coco_model = YOLO(COCO_MODEL_DIR)
 license_plate_detector = YOLO(LICENSE_MODEL_DETECTION_DIR)
+coco_model = YOLO(COCO_MODEL_DIR).to(torch.device(0))
+license_plate_detector = YOLO(LICENSE_MODEL_DETECTION_DIR).to(torch.device(0))
 
-# Check if GPU is available
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-# Set the YOLOV8 model to run on GPU
-coco_model.to(device)
-license_plate_detector.to(device)
-    
 threshold = 0.15
 
 class VideoProcessor:
@@ -67,7 +64,7 @@ def model_prediction(img, frame_number):
 
     img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
 
-    object_detections = coco_model.track(img, persist=True)[0]
+    object_detections = coco_model.track(img, persist=True, tracker="bytetrack.yaml")[0]
     vehicle_detected = False
     vehicle_bboxes = []
 
@@ -103,19 +100,35 @@ def model_prediction(img, frame_number):
                                 cv2.rectangle(img, (int(x1), int(y1)), (int(x2), int(y2)), (0, 255, 0), 3)
 
                                 license_plate_crop = img[int(y1):int(y2), int(x1): int(x2), :]
-                                license_plate_crop_gray = cv2.cvtColor(license_plate_crop, cv2.COLOR_BGR2GRAY)
-                                # _, license_plate_crop_gray = cv2.threshold(license_plate_crop_gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)                         
-                            
-                                # cv2.imshow('Cropped License Plate', license_plate_crop_gray)  
+                                license_plate_crop_gray = cv2.cvtColor(license_plate_crop, cv2.COLOR_BGR2GRAY)                         
+                                
+                                lp_height, lp_width = license_plate_crop_gray.shape
+                                license_plate_crop_gray = cv2.resize(license_plate_crop_gray, (lp_width*5, lp_height*5))
+                                # _, license_plate_crop_gray = cv2.threshold(license_plate_crop_gray, 150, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
+                                # img_ff = license_plate_crop_gray.copy()
+                                # h, w = img_ff.shape[:2]
+                                # img_ff = cv2.rectangle(img_ff, (0,0), (w+1,h-1), 255, 2)
+                                # mask = np.zeros((h+2, w+2), np.uint8)
+                                # cv2.floodFill(img_ff, mask, (0,0), 0)
+                                # img_ff = cv2.bitwise_not(img_ff)
+                                # cv2.imshow('Cropped License Plate', img_ff)  
                                 license_plate_text, license_plate_text_score = read_license_plate(license_plate_crop_gray, img)
                                 print(license_plate_text)
                                 licenses_texts.append(license_plate_text)
+                                
 
                                 if license_plate_text is not None and license_plate_text_score is not None:
-                                    if license_plate_text_score >= 0.3:
+                                    lp_length = len(license_plate_text)
+                                    
+                                    if lp_length <= 5:
+                                        break
+                                    
+                                    elif lp_length >= 8:
+                                        break
+                                    # set the treshold for this 
+                                    if license_plate_text_score >= 0.7:
                                         license_plate_text = re.sub(r'[^A-Za-z0-9]', '', license_plate_text)
-                                        lp_length = len(license_plate_text)
-
+                                        
                                         #formatting
                                         if lp_length >= 6 and lp_length <= 7:
                                             if class_name in ["Car", "Bus", "Truck"]:
@@ -140,8 +153,6 @@ def model_prediction(img, frame_number):
                                                     l = int2char(l)
                                                 license_plate_text = (n + "-" + l)
                                         
-                                        elif lp_length <=5:
-                                            break
 
                                         end_time = time.time()
                                         inference_time = end_time - start_time  # in seconds                                      
@@ -190,12 +201,12 @@ def model_prediction(img, frame_number):
 
 
 def main():
-    cap = cv2.VideoCapture(0)
+    cap = cv2.VideoCapture(2)
     processor = VideoProcessor()
     frame_number = 0
             
     # Set the desired width and height for the resized frames
-    width = 1080
+    width = 1280
     height = 720
 
     while True:
@@ -206,12 +217,12 @@ def main():
         # Increment frame number
         frame_number += 1
 
-        if frame_number % 1 == 0:
+        if frame_number % 2 == 0:
             # Process the frame
             processed_frame = processor.recv(frame)
+            processed_frame = cv2.resize(processed_frame, (width, height))
             result = model_prediction(processed_frame, frame_number)
             processed_frame = result[0]
-            processed_frame = cv2.resize(processed_frame, (width, height))
             cv2.imshow("Tech Titans Realtime License Plate Recognition", processed_frame)
 
         # Break the loop on pressing 'q'
@@ -224,3 +235,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+app.py
+Ipinapakita ang app.py.
